@@ -132,6 +132,39 @@ describe('Runner', function(){
       });
       runner.checkGlobals('im a test');
     })
+
+    it('should respect per test whitelisted globals', function() {
+      var test = new Test('im a test about lions');
+      test.globals(['foo']);
+
+      suite.addTest(test);
+      var runner = new Runner(suite);
+
+      global.foo = 'bar';
+
+      // verify the test hasn't failed.
+      runner.checkGlobals(test);
+      test.should.not.have.key('state');
+
+      delete global.foo;
+    })
+
+    it('should respect per test whitelisted globals but still detect other leaks', function(done) {
+      var test = new Test('im a test about lions');
+      test.globals(['foo']);
+
+      suite.addTest(test);
+
+      global.foo = 'bar';
+      global.bar = 'baz';
+      runner.on('fail', function(test, err){
+        test.title.should.equal('im a test about lions');
+        err.message.should.equal('global leak detected: bar');
+        delete global.foo;
+        done();
+      });
+      runner.checkGlobals(test);
+    })
   })
 
   describe('.fail(test, err)', function(){
@@ -160,7 +193,7 @@ describe('Runner', function(){
     })
   })
 
-  describe('.failHook(hoot, err)', function(){
+  describe('.failHook(hook, err)', function(){
     it('should increment .failures', function(){
       runner.failures.should.equal(0);
       runner.failHook({}, {});
@@ -179,10 +212,19 @@ describe('Runner', function(){
       runner.failHook(hook, err);
     })
 
-    it('should emit "end"', function(done){
+    it('should emit "end" if suite bail is true', function(done){
       var hook = {}, err = {};
+      suite.bail(true);
       runner.on('end', done);
       runner.failHook(hook, err);
+    })
+
+    it('should not emit "end" if suite bail is not true', function(done){
+      var hook = {}, err = {};
+      suite.bail(false);
+      runner.on('end', function() { throw new Error('"end" was emit, but the bail is false'); });
+      runner.failHook(hook, err);
+      done();
     })
   })
 })
